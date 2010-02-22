@@ -22,11 +22,17 @@ local function GetSpellCooldownRemaining(spell)
 	if enabled == 0 then
 		return -1
 	end
+	if start == 0 then
+		return 0
+	end
 	return start + duration - GetTime()
 end
 
 local function updateCycle()
-	local GCD = 1.5 / (1 + GetCombatRatingBonus(18) / 100);
+	-- local GCD = 1.5 / (1 + GetCombatRatingBonus(18) / 100);
+	local GCD = GetSpellCooldownRemaining("Healing Wave")
+	local ssCD = GetSpellCooldownRemaining("Stormstrike")
+	local shockCD = GetSpellCooldownRemaining("Earth Shock")
 	-- LS_0 - Cast Lightning Shield if there are no orbs left on you.
 	local name, _, icon, count = UnitAura("player", "Lightning Shield")
 	if not name then
@@ -36,14 +42,9 @@ local function updateCycle()
 	-- skip: SW - Cast Feral Spirit if the ability is off CD. (Use your own judgement for timing with Bloodlust/Heroism)
 	--]]
 
-	-- SR - Cast Shamanistic Rage if the ability is off CD. (with 2p T10 should be used immediately)
-	if GetSpellCooldownRemaining("Shamanistic Rage") == 0 then
-		return "Shamanistic Rage"
-	end
-
 	--SS_0 - Cast a Stormstrike if there are no charges left on the target.
 	local name, _ icon, count = UnitDebuff("target", "Stormstrike")
-	if not name and GetSpellCooldownRemaining("Stormstrike") < GCD then
+	if not name and ssCD <= GCD then
 		return "Stormstrike"
 	end
 
@@ -60,34 +61,66 @@ local function updateCycle()
 	--]]
 
 	-- FS - Cast a Flame Shock if there is no Flame Shock debuff on target.
-	local name, _, icon = UnitDebuff("target", "Flame Shock")
-	if not name and GetSpellCooldownRemaining("Flame Shock") < GCD then
+	local name, _, icon, _, _, duration, expirationTime = UnitDebuff("target", "Flame Shock")
+	
+	if name then
+		local remaining = expirationTime - GetTime()
+		local cooldown = GetSpellCooldownRemaining("Flame Shock")
+		if remaining <= GCD and cooldown <= GCD then
+			return "Flame Shock"
+		end
+	elseif shockCD <= GCD then
 		return "Flame Shock"
 	end
-
+	
+	local llCD = GetSpellCooldownRemaining("Lava Lash")
 	-- ES - Cast an Earth shock whenever its off cooldown and the above are not available.
-	if GetSpellCooldownRemaining("Earth Shock") < GCD then
+	if esCD == 0 then
 		return "Earth Shock"
 	end
 
 	-- SS - Cast a Stormstrike whenever its off cooldown and MW hasn't got 5 stacks
-	if GetSpellCooldownRemaining("Stormstrike") < GCD then
+	if ssCD == 0 then
 		return "Stormstrike"
 	end
 
 	-- LL - Cast a lava lash whenever its off cooldown and none of the above abilities are available.
-	if GetSpellCooldownRemaining("Lava Lash") < GCD then
+	if llCD == 0 then
 		return "Lava Lash"
 	end
 
+	-- ES - Cast an Earth shock whenever its off cooldown and the above are not available.
+	if esCD <= GCD then
+		return "Earth Shock"
+	end
+
+	-- SS - Cast a Stormstrike whenever its off cooldown and MW hasn't got 5 stacks
+	if ssCD <= GCD then
+		return "Stormstrike"
+	end
+
+	-- LL - Cast a lava lash whenever its off cooldown and none of the above abilities are available.
+	if llCD <= GCD then
+		return "Lava Lash"
+	end
+
+	local _, firetotemname, starttime, duration = GetTotemInfo(1)
+	local firetotemRemaining = 99
+	if not firetotemname or firetotemname == "" then
+		return "Magma Totem"
+	else
+		firetotemRemaining = starttime + duration - GetTime()
+	end
+	
 	-- !!!!!missing comment
-	if GetSpellCooldownRemaining("Fire Nova") < GCD then
+	if GetSpellCooldownRemaining("Fire Nova") <= GCD then
 		return "Fire Nova"
 	end
 
-	--[[
-	skip: MT - Refresh your Magma Totem if there are 2 secs or less left.
-	--]]
+	-- MT - Refresh your Magma Totem if there are 2 secs or less left.
+	if firetotemRemaining <= 2 then
+		return "Magma Totem"
+	end
 	
 	-- LS - Refresh your Lightning Shield if low number of orbs remaining (2 or less).
 	local name, _, icon, count = UnitAura("player", "Lightning Shield")
