@@ -1,24 +1,30 @@
 if select(2,UnitClass("player")) ~= "SHAMAN" then return end
 
-local addon = LibStub("AceAddon-3.0"):NewAddon("PriorityCycle")
-
-_G.Prio = addon
-
 local ICON_HEIGHT = 20
-local display = CreateFrame('Frame')
+local display = CreateFrame('Frame', nil, UIParent, "SecureHandlerStateTemplate")
+RegisterStateDriver(display, "visibility", "[spec:1]show;hide")
 display:SetPoint("CENTER", UIParent, "CENTER", -80, -50)
 display:SetHeight(ICON_HEIGHT)
 display:SetWidth(ICON_HEIGHT)
 display:Show()
 
-local icon = display:CreateTexture(nil, "BORDER")
-icon:SetTexture([[Interface\Icons\Spell_Shaman_MaelstromWeapon]])
-icon:SetAllPoints(display)
-
-addon.icon = icon
+local primaryIcon = display:CreateTexture(nil, "BORDER")
+primaryIcon:SetTexture([[Interface\Icons\Spell_Shaman_MaelstromWeapon]])
+primaryIcon:SetAllPoints(display)
 
 local function GetSpellCooldownRemaining(spell)
 	local start, duration, enabled = GetSpellCooldown(spell)
+	if enabled == 0 then
+		return -1
+	end
+	if start == 0 then
+		return 0
+	end
+	return start + duration - GetTime()
+end
+
+local function GetItemCooldownRemaining(index)
+	local start, duration, enabled =  GetInventoryItemCooldown("player", index)
 	if enabled == 0 then
 		return -1
 	end
@@ -61,9 +67,9 @@ local function updateCycle()
 	--]]
 
 	-- FS - Cast a Flame Shock if there is no Flame Shock debuff on target.
-	local name, _, icon, _, _, duration, expirationTime = UnitDebuff("target", "Flame Shock")
+	local name, _, icon, _, _, duration, expirationTime, unitCaster = UnitDebuff("target", "Flame Shock")
 	
-	if name then
+	if name and unitCaster == "player" then
 		local remaining = expirationTime - GetTime()
 		local cooldown = GetSpellCooldownRemaining("Flame Shock")
 		if remaining <= GCD and cooldown <= GCD then
@@ -75,7 +81,7 @@ local function updateCycle()
 	
 	local llCD = GetSpellCooldownRemaining("Lava Lash")
 	-- ES - Cast an Earth shock whenever its off cooldown and the above are not available.
-	if esCD == 0 then
+	if shockCD == 0 then
 		return "Earth Shock"
 	end
 
@@ -90,11 +96,12 @@ local function updateCycle()
 	end
 
 	-- ES - Cast an Earth shock whenever its off cooldown and the above are not available.
-	if esCD <= GCD then
+	if shockCD <= GCD then
 		return "Earth Shock"
 	end
 
 	-- SS - Cast a Stormstrike whenever its off cooldown and MW hasn't got 5 stacks
+	
 	if ssCD <= GCD then
 		return "Stormstrike"
 	end
@@ -132,9 +139,64 @@ local function updateCycle()
 	return "Call of the Elements"
 end
 
-function updateIcon()
+local function updateIcon()
 	local nextSpell = updateCycle()
 	local _, _, icon = GetSpellInfo(nextSpell)
-	addon.icon:SetTexture(icon)
+	primaryIcon:SetTexture(icon)
 end
 display:SetScript("OnUpdate", updateIcon)
+
+local aoeDisplay = CreateFrame('Frame', nil, UIParent, "SecureHandlerStateTemplate")
+RegisterStateDriver(aoeDisplay, "visibility", "[spec:1]show;hide")
+aoeDisplay:SetPoint("CENTER", UIParent, "CENTER", -110, -50)
+aoeDisplay:SetHeight(ICON_HEIGHT)
+aoeDisplay:SetWidth(ICON_HEIGHT)
+aoeDisplay:Show()
+
+local aoeIcon = aoeDisplay:CreateTexture(nil, "BORDER")
+aoeIcon:SetTexture([[Interface\Icons\Spell_Shaman_MaelstromWeapon]])
+aoeIcon:SetAllPoints(aoeDisplay)
+
+local function getNextAoESpell()
+	local GCD = GetSpellCooldownRemaining("Healing Wave")
+	local name, _, icon, count = UnitAura("player", "Maelstrom Weapon")
+	if name and count == 5 and GetSpellCooldownRemaining("Chain Lightning") <= GCD then
+		return "Chain Lightning"
+	end
+
+	local _, firetotemname, starttime, duration = GetTotemInfo(1)
+	if not firetotemname or firetotemname == "" then
+		return "Magma Totem"
+	end
+	local cd = GetSpellCooldownRemaining("Fire Nova")
+	--print(cd)
+	--print(GCD)
+	if GetSpellCooldownRemaining("Fire Nova") <= GCD then
+		return "Fire Nova"
+	end
+	local firetotemRemaining = starttime + duration - GetTime()
+	if firetotemRemaining < 3 then
+		return "Magma Totem"
+	end
+	return ""
+end
+
+local function updateAoEDisplay(self)
+	local nextspell = getNextAoESpell()
+	local icon
+	if nextspell then
+		_, _, icon = GetSpellInfo(nextspell)
+	end
+	aoeIcon:SetTexture(icon)
+end
+aoeDisplay:SetScript("OnUpdate", updateAoEDisplay)
+
+display:EnableMouse(true)
+display:SetScript("OnMouseUp", function()
+		if aoeDisplay:IsShown() then
+			UnregisterStateDriver(aoeDisplay, "visibility")
+			aoeDisplay:Hide()
+		else
+			RegisterStateDriver(aoeDisplay, "visibility", "[spec:1]show;hide")
+		end
+	end)
