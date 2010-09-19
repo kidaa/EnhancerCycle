@@ -17,7 +17,7 @@ local function GetSpellCooldownRemaining(spell)
 	if enabled == 0 then
 		return -1
 	end
-	if start == 0 then
+	if not start or start == 0 then
 		return 0
 	end
 	return start + duration - GetTime()
@@ -68,7 +68,7 @@ local function updateCycle()
 
 	-- FS - Cast a Flame Shock if there is no Flame Shock debuff on target.
 	local name, _, icon, _, _, duration, expirationTime, unitCaster = UnitDebuff("target", "Flame Shock")
-	
+
 	if name and unitCaster == "player" then
 		local remaining = expirationTime - GetTime()
 		local cooldown = GetSpellCooldownRemaining("Flame Shock")
@@ -78,7 +78,7 @@ local function updateCycle()
 	elseif shockCD <= GCD then
 		return "Flame Shock"
 	end
-	
+
 	local llCD = GetSpellCooldownRemaining("Lava Lash")
 	-- ES - Cast an Earth shock whenever its off cooldown and the above are not available.
 	if shockCD == 0 then
@@ -101,7 +101,7 @@ local function updateCycle()
 	end
 
 	-- SS - Cast a Stormstrike whenever its off cooldown and MW hasn't got 5 stacks
-	
+
 	if ssCD <= GCD then
 		return "Stormstrike"
 	end
@@ -118,7 +118,7 @@ local function updateCycle()
 	else
 		firetotemRemaining = starttime + duration - GetTime()
 	end
-	
+
 	-- !!!!!missing comment
 	if GetSpellCooldownRemaining("Fire Nova") <= GCD then
 		return "Fire Nova"
@@ -128,7 +128,7 @@ local function updateCycle()
 	if firetotemRemaining <= 2 then
 		return "Magma Totem"
 	end
-	
+
 	-- LS - Refresh your Lightning Shield if low number of orbs remaining (2 or less).
 	local name, _, icon, count = UnitAura("player", "Lightning Shield")
 	if count < 3 then
