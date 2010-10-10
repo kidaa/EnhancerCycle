@@ -1,16 +1,13 @@
 if select(2,UnitClass("player")) ~= "SHAMAN" then return end
 
 local ICON_HEIGHT = 20
+local MAX_SPELLS = 3
 local display = CreateFrame('Frame', nil, UIParent, "SecureHandlerStateTemplate")
 RegisterStateDriver(display, "visibility", "[spec:1]show;hide")
 display:SetPoint("CENTER", UIParent, "CENTER", -80, -50)
 display:SetHeight(ICON_HEIGHT)
 display:SetWidth(ICON_HEIGHT)
 display:Show()
-
-local primaryIcon = display:CreateTexture(nil, "BORDER")
-primaryIcon:SetTexture([[Interface\Icons\Spell_Shaman_MaelstromWeapon]])
-primaryIcon:SetAllPoints(display)
 
 local function GetSpellCooldownRemaining(spell)
 	local start, duration, enabled = GetSpellCooldown(spell)
@@ -88,7 +85,7 @@ local function updateCycle()
 
 	local llCD = GetSpellCooldownRemaining("Lava Lash")
 	-- ES - Cast an Earth shock whenever its off cooldown and the above are not available.
-	if shockCD == 0 then
+	if shockCD == 0 and not usedSpells["Flame Shock"] then
 		queue("Earth Shock")
 	end
 
@@ -103,7 +100,7 @@ local function updateCycle()
 	end
 
 	-- ES - Cast an Earth shock whenever its off cooldown and the above are not available.
-	if shockCD <= GCD then
+	if shockCD <= GCD and not usedSpells["Flame Shock"] then
 		queue("Earth Shock")
 	end
 
@@ -146,15 +143,51 @@ local function updateCycle()
 	if #order == 0 then
 		queue("Call of the Elements")
 	end
-	return order[1]
+	return order
+end
+
+local firstIcon = display:CreateTexture(nil, "BORDER")
+firstIcon:SetAllPoints(display)
+
+local secondIcon = display:CreateTexture(nil, "BORDER")
+secondIcon:SetPoint("BOTTOM", firstIcon, "TOP", 0, 4)
+secondIcon:SetWidth(ICON_HEIGHT - 4)
+secondIcon:SetHeight(ICON_HEIGHT - 4)
+
+local primaryTextureCache = {
+	[1] = firstIcon,
+	[2] = secondIcon,
+}
+
+local function getPrimaryTexture(num)
+	local texture = primaryTextureCache[num]
+	if not texture then
+		texture = display:CreateTexture(nil, "BORDER")
+		local parent = getPrimaryTexture(num - 1)
+		texture:SetPoint("BOTTOM", parent, "TOP", 0, 5)
+		texture:SetHeight(parent:GetHeight())
+		texture:SetWidth(parent:GetHeight())
+		primaryTextureCache[num] = texture
+	end
+	return texture
 end
 
 local function updateIcon()
-	local nextSpell = updateCycle()
-	local _, _, icon = GetSpellInfo(nextSpell)
-	primaryIcon:SetTexture(icon)
+	local order = updateCycle()
+	for i = 1,MAX_SPELLS do
+		local texture = getPrimaryTexture(i)
+		if not order[i] then
+			texture:Hide()
+		else
+			local nextSpell = order[i]
+			local _, _, icon = GetSpellInfo(nextSpell)
+			texture:SetTexture(icon)
+			texture:Show()
+		end
+	end
 end
 display:SetScript("OnUpdate", updateIcon)
+_G.display = display
 
 local aoeDisplay = CreateFrame('Frame', nil, UIParent, "SecureHandlerStateTemplate")
 RegisterStateDriver(aoeDisplay, "visibility", "[spec:1]show;hide")
