@@ -31,9 +31,12 @@ local function GetItemCooldownRemaining(index)
 	return start + duration - GetTime()
 end
 
+local usedSpells = {}
+local order = {}
+
 local function updateCycle()
-	local usedSpells = {}
-	local order = {}
+	wipe(usedSpells)
+	wipe(order)
 	local function queue(spell)
 		if usedSpells[spell] then return end
 		usedSpells[spell] = true
@@ -52,9 +55,10 @@ local function updateCycle()
 	-- skip: SW - Cast Feral Spirit if the ability is off CD. (Use your own judgement for timing with Bloodlust/Heroism)
 	--]]
 
+	local inMelee = IsSpellInRange("Stormstrike", "target") == 1
 	--SS_0 - Cast a Stormstrike if there are no charges left on the target.
 	local name, _ icon, count = UnitDebuff("target", "Stormstrike")
-	if not name and ssCD <= GCD then
+	if not name and ssCD <= GCD and inMelee then
 		queue("Stormstrike")
 	end
 
@@ -90,12 +94,12 @@ local function updateCycle()
 	end
 
 	-- SS - Cast a Stormstrike whenever its off cooldown and MW hasn't got 5 stacks
-	if ssCD == 0 then
+	if ssCD == 0 and inMelee then
 		queue("Stormstrike")
 	end
 
 	-- LL - Cast a lava lash whenever its off cooldown and none of the above abilities are available.
-	if llCD == 0 then
+	if llCD == 0 and inMelee then
 		queue("Lava Lash")
 	end
 
@@ -106,12 +110,12 @@ local function updateCycle()
 
 	-- SS - Cast a Stormstrike whenever its off cooldown and MW hasn't got 5 stacks
 
-	if ssCD <= GCD then
+	if ssCD <= GCD and inMelee then
 		queue("Stormstrike")
 	end
 
 	-- LL - Cast a lava lash whenever its off cooldown and none of the above abilities are available.
-	if llCD <= GCD then
+	if llCD <= GCD and inMelee then
 		queue("Lava Lash")
 	end
 
