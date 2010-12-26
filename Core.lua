@@ -1,7 +1,7 @@
 if select(2,UnitClass("player")) ~= "SHAMAN" then return end
 
 local ICON_HEIGHT = 20
-local MAX_SPELLS = 3
+local MAX_SPELLS = 8
 local display = CreateFrame('Frame', nil, UIParent, "SecureHandlerStateTemplate")
 RegisterStateDriver(display, "visibility", "[spec:1]show;hide")
 display:SetPoint("CENTER", UIParent, "CENTER", -80, -50)
@@ -55,13 +55,27 @@ local function updateCycle()
 	-- skip: SW - Cast Feral Spirit if the ability is off CD. (Use your own judgement for timing with Bloodlust/Heroism)
 	--]]
 
-	local inMelee = IsSpellInRange("Stormstrike", "target") == 1
-	--SS_0 - Cast a Stormstrike if there are no charges left on the target.
-	local name, _ icon, count = UnitDebuff("target", "Stormstrike")
-	if not name and ssCD <= GCD and inMelee then
-		queue("Stormstrike")
+	local _, firetotemname, starttime, duration = GetTotemInfo(1)
+	local firetotemRemaining = starttime + duration - GetTime()
+	if not firetotemname or firetotemname == "" then
+		queue("Searing Totem")
 	end
 
+	local inMelee = IsSpellInRange("Stormstrike", "target") == 1
+	if not inMelee then
+		queue("Earth Shock")
+	end
+
+	local llCD = GetSpellCooldownRemaining("Lava Lash")
+	if llCD == 0 and inMelee then
+		queue("Lava Lash")
+	end
+
+	-- FS if UE is present
+	local ufPresent = UnitAura("player", "Unleash Flame")
+	if ufPresent and shockCD == 0 then
+		queue("Flame Shock")
+	end
 
 	-- MW5_LB - Cast a Lightning Bolt when you have 5 Maelstrom weapon stacks
 	local name, _, icon, count = UnitAura("player", "Maelstrom Weapon")
@@ -69,38 +83,25 @@ local function updateCycle()
 		queue("Lightning bolt")
 	end
 
-	--[[
-	skip: FE - Cast your Fire Elemental if it is off CD (This will also free up GCDs for other abilities making it very useful during Bloodlust/Heroism).
-	skip: MT_0 - Refresh your Magma Totem if it has expired.
-	--]]
-
-	-- FS - Cast a Flame Shock if there is no Flame Shock debuff on target.
-	local name, _, icon, _, _, duration, expirationTime, unitCaster = UnitDebuff("target", "Flame Shock")
-
-	if name and unitCaster == "player" then
-		local remaining = expirationTime - GetTime()
-		local cooldown = GetSpellCooldownRemaining("Flame Shock")
-		if remaining <= GCD and cooldown <= GCD then
-			queue("Flame Shock")
-		end
-	elseif shockCD <= GCD then
-		queue("Flame Shock")
+	local ueCD = GetSpellCooldownRemaining("Unleash Elements")
+	if ueCD == 0 then
+		queue("Unleash Elements")
 	end
 
-	local llCD = GetSpellCooldownRemaining("Lava Lash")
-	-- ES - Cast an Earth shock whenever its off cooldown and the above are not available.
-	if shockCD == 0 and not usedSpells["Flame Shock"] then
-		queue("Earth Shock")
-	end
-
-	-- SS - Cast a Stormstrike whenever its off cooldown and MW hasn't got 5 stacks
 	if ssCD == 0 and inMelee then
 		queue("Stormstrike")
 	end
 
-	-- LL - Cast a lava lash whenever its off cooldown and none of the above abilities are available.
-	if llCD == 0 and inMelee then
-		queue("Lava Lash")
+	if shockCD == 0 and not usedSpells["Flame Shock"] then
+		queue("Earth Shock")
+	end
+
+	if ufPresent and shockCD <= GCD then
+		queue("Flame Shock")
+	end
+
+	if ueCD <= GCD then
+		queue("Unleash Elements")
 	end
 
 	-- ES - Cast an Earth shock whenever its off cooldown and the above are not available.
@@ -109,7 +110,6 @@ local function updateCycle()
 	end
 
 	-- SS - Cast a Stormstrike whenever its off cooldown and MW hasn't got 5 stacks
-
 	if ssCD <= GCD and inMelee then
 		queue("Stormstrike")
 	end
@@ -117,24 +117,6 @@ local function updateCycle()
 	-- LL - Cast a lava lash whenever its off cooldown and none of the above abilities are available.
 	if llCD <= GCD and inMelee then
 		queue("Lava Lash")
-	end
-
-	local _, firetotemname, starttime, duration = GetTotemInfo(1)
-	local firetotemRemaining = 99
-	if not firetotemname or firetotemname == "" then
-		queue("Magma Totem")
-	else
-		firetotemRemaining = starttime + duration - GetTime()
-	end
-
-	-- !!!!!missing comment
-	if GetSpellCooldownRemaining("Fire Nova") <= GCD then
-		queue("Fire Nova")
-	end
-
-	-- MT - Refresh your Magma Totem if there are 2 secs or less left.
-	if firetotemRemaining <= 2 then
-		queue("Magma Totem")
 	end
 
 	-- LS - Refresh your Lightning Shield if low number of orbs remaining (2 or less).
