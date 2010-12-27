@@ -1,7 +1,7 @@
 if select(2,UnitClass("player")) ~= "SHAMAN" then return end
 
 local ICON_HEIGHT = 20
-local MAX_SPELLS = 8
+local MAX_SPELLS = 4
 local display = CreateFrame('Frame', nil, UIParent, "SecureHandlerStateTemplate")
 RegisterStateDriver(display, "visibility", "[spec:1]show;hide")
 display:SetPoint("CENTER", UIParent, "CENTER", -80, -50)
@@ -61,6 +61,15 @@ local function updateCycle()
 		for i,v in ipairs(list) do
 			queue(v)
 		end
+	end
+
+	local hasMH, mhExp, _, hasOH, ohExp = GetWeaponEnchantInfo()
+
+	if not hasMH or (not InCombatLockdown() and mhExp < 600000) then
+		queue("Windfury Weapon")
+	end
+	if not hasOH or (not InCombatLockdown() and ohExp < 600000) then
+		queue("Flametongue Weapon")
 	end
 
 	-- LS_0 - Cast Lightning Shield if there are no orbs left on you.
