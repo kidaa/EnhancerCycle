@@ -33,6 +33,7 @@ end
 
 local usedSpells = {}
 local order = {}
+local rest = {}
 
 local function updateCycle()
 	wipe(usedSpells)
@@ -42,10 +43,26 @@ local function updateCycle()
 		usedSpells[spell] = true
 		table.insert(order, spell)
 	end
-	-- local GCD = 1.5 / (1 + GetCombatRatingBonus(18) / 100);
+
 	local GCD = GetSpellCooldownRemaining("Healing Wave")
 	local ssCD = GetSpellCooldownRemaining("Stormstrike")
 	local shockCD = GetSpellCooldownRemaining("Earth Shock")
+
+	local function queueReadySpells(list)
+		for i,v in ipairs(list) do
+			if GetSpellCooldownRemaining(v) <= GCD then
+				queue(v)
+			end
+		end
+	end
+
+	local function queueSortedSpells(list)
+		table.sort(list, function(a,b) return GetSpellCooldownRemaining(a) < GetSpellCooldownRemaining(b) end)
+		for i,v in ipairs(list) do
+			queue(v)
+		end
+	end
+
 	-- LS_0 - Cast Lightning Shield if there are no orbs left on you.
 	local name, _, icon, count = UnitAura("player", "Lightning Shield")
 	if not name then
@@ -61,19 +78,18 @@ local function updateCycle()
 		queue("Searing Totem")
 	end
 
-	local inMelee = IsSpellInRange("Stormstrike", "target") == 1
-	if not inMelee then
-		queue("Earth Shock")
-	end
-
 	local llCD = GetSpellCooldownRemaining("Lava Lash")
-	if llCD == 0 and inMelee then
+	if llCD <= GCD and llCD <= shockCD then
 		queue("Lava Lash")
 	end
 
 	-- FS if UE is present
-	local ufPresent = UnitAura("player", "Unleash Flame")
-	if ufPresent and shockCD == 0 then
+	local ufname, _, _, _, _, _, endTime = UnitAura("player", "Unleash Flame")
+	local ufremaining = 0
+	if ufname then
+		ufremaining = endTime - GetTime()
+	end
+	if ufname and shockCD <= GCD and ufremaining >= shockCD then
 		queue("Flame Shock")
 	end
 
@@ -83,41 +99,17 @@ local function updateCycle()
 		queue("Lightning bolt")
 	end
 
-	local ueCD = GetSpellCooldownRemaining("Unleash Elements")
-	if ueCD == 0 then
-		queue("Unleash Elements")
+	wipe(rest)
+	table.insert(rest, "Lava Lash")
+	table.insert(rest, "Unleash Elements")
+	table.insert(rest, "Stormstrike")
+	if ufname and ufremaining >= shockCD then
+		table.insert(rest, "Flame Shock")
+	else
+		table.insert(rest, "Earth Shock")
 	end
 
-	if ssCD == 0 and inMelee then
-		queue("Stormstrike")
-	end
-
-	if shockCD == 0 and not usedSpells["Flame Shock"] then
-		queue("Earth Shock")
-	end
-
-	if ufPresent and shockCD <= GCD then
-		queue("Flame Shock")
-	end
-
-	if ueCD <= GCD then
-		queue("Unleash Elements")
-	end
-
-	-- ES - Cast an Earth shock whenever its off cooldown and the above are not available.
-	if shockCD <= GCD and not usedSpells["Flame Shock"] then
-		queue("Earth Shock")
-	end
-
-	-- SS - Cast a Stormstrike whenever its off cooldown and MW hasn't got 5 stacks
-	if ssCD <= GCD and inMelee then
-		queue("Stormstrike")
-	end
-
-	-- LL - Cast a lava lash whenever its off cooldown and none of the above abilities are available.
-	if llCD <= GCD and inMelee then
-		queue("Lava Lash")
-	end
+	queueReadySpells(rest)
 
 	-- LS - Refresh your Lightning Shield if low number of orbs remaining (2 or less).
 	local name, _, icon, count = UnitAura("player", "Lightning Shield")
@@ -129,6 +121,9 @@ local function updateCycle()
 	if #order == 0 then
 		queue("Call of the Elements")
 	end
+
+	queueSortedSpells(rest)
+
 	return order
 end
 
